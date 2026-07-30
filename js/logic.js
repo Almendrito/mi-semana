@@ -404,6 +404,77 @@
     return out;
   }
 
+  // ------------------------------------------------------------- calendario
+
+  function timeToMin(t) {
+    return Number(String(t).slice(0, 2)) * 60 + Number(String(t).slice(3, 5));
+  }
+
+  var MIN_BLOCK = 15;   // alto minimo de un bloque para que se pueda tocar
+
+  /**
+   * Reparte en columnas las actividades con hora de UN dia, al estilo de un
+   * calendario: las que se pisan quedan lado a lado. Devuelve
+   * [{ id, start, end, col, cols, item }] con minutos desde medianoche.
+   */
+  function layoutDay(items) {
+    var evs = (items || [])
+      .filter(function (a) { return a.time; })
+      .map(function (a) {
+        var s = timeToMin(a.time);
+        var e = s + Math.max(MIN_BLOCK, Math.round(Number(a.minutes) || 0));
+        return { id: a.id, start: s, end: Math.min(e, 24 * 60), item: a };
+      })
+      .sort(function (a, b) {
+        if (a.start !== b.start) return a.start - b.start;
+        return a.end - b.end;
+      });
+
+    var out = [];
+    var grupo = [];
+    var finGrupo = -1;
+
+    function cerrar() {
+      if (!grupo.length) return;
+      var cols = [];   // cada columna guarda donde termina su ultimo evento
+      grupo.forEach(function (ev) {
+        var c = 0;
+        while (c < cols.length && cols[c] > ev.start) c++;
+        cols[c] = ev.end;
+        ev.col = c;
+      });
+      grupo.forEach(function (ev) {
+        out.push({ id: ev.id, start: ev.start, end: ev.end, col: ev.col, cols: cols.length, item: ev.item });
+      });
+      grupo = [];
+      finGrupo = -1;
+    }
+
+    evs.forEach(function (ev) {
+      if (grupo.length && ev.start >= finGrupo) cerrar();
+      grupo.push(ev);
+      finGrupo = Math.max(finGrupo, ev.end);
+    });
+    cerrar();
+    return out;
+  }
+
+  /** Rango de horas que tiene que mostrar el calendario para que quepa todo. */
+  function calendarRange(items, minHour, maxHour) {
+    var lo = minHour == null ? 7 : minHour;
+    var hi = maxHour == null ? 22 : maxHour;
+    (items || []).forEach(function (a) {
+      if (!a.time) return;
+      var s = timeToMin(a.time);
+      var e = Math.min(24 * 60, s + Math.max(MIN_BLOCK, Math.round(Number(a.minutes) || 0)));
+      lo = Math.min(lo, Math.floor(s / 60));
+      hi = Math.max(hi, Math.ceil(e / 60));
+    });
+    lo = Math.max(0, lo);
+    hi = Math.min(24, Math.max(hi, lo + 1));
+    return { startHour: lo, endHour: hi };
+  }
+
   /** Choques de horario dentro de un mismo dia (solo actividades con hora). */
   function overlaps(activities) {
     var withTime = (activities || []).filter(function (a) { return a.time; });
@@ -457,6 +528,9 @@
     summarizeWeek: summarizeWeek,
     minutesByDay: minutesByDay,
     balanceWarnings: balanceWarnings,
+    timeToMin: timeToMin,
+    layoutDay: layoutDay,
+    calendarRange: calendarRange,
     overlaps: overlaps
   };
 });

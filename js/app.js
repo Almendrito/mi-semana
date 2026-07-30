@@ -25,9 +25,21 @@
   var toastEl = document.getElementById('toast');
   var toastTimer = null;
 
+  var VISTA_KEY = 'mi-semana:vista';
+
+  function vistaGuardada() {
+    try {
+      var v = localStorage.getItem(VISTA_KEY);
+      return v === 'calendario' ? 'calendario' : 'semana';
+    } catch (e) {
+      return 'semana';
+    }
+  }
+
   var view = {
     week: Logic.startOfWeek(Logic.todayISO()),
     modal: null,             // {type:'activity'|'areas', ...}
+    vista: vistaGuardada(),  // 'semana' | 'calendario'
     quick: ''
   };
 
@@ -144,6 +156,10 @@
             (saving ? ' &middot; guardando...' : '') + '</div>' +
         '</div>' +
         '<div class="spacer"></div>' +
+        '<div class="segmented" role="group" aria-label="Vista">' +
+          '<button class="btn small' + (view.vista === 'semana' ? ' on' : '') + '" data-act="vista" data-vista="semana">Lista</button>' +
+          '<button class="btn small' + (view.vista === 'calendario' ? ' on' : '') + '" data-act="vista" data-vista="calendario">Calendario</button>' +
+        '</div>' +
         '<div class="weeknav">' +
           '<button class="btn icon" data-act="week" data-delta="-1" aria-label="Semana anterior">&#8592;</button>' +
           '<span class="label">' + esc(Logic.weekLabel(view.week)) + '</span>' +
@@ -166,7 +182,7 @@
       '<form class="quick" id="quick-form" autocomplete="off">' +
         '<input type="text" id="quick" name="quick" placeholder="Ej: Cena con Ayleen #pareja vie 20:30 2h" value="' + esc(view.quick) + '">' +
         '<button class="btn primary" type="submit">Agregar</button>' +
-        '<button class="btn" type="button" data-act="new" data-date="' + esc(target) + '" title="Formulario completo">&#43;&#8230;</button>' +
+        '<button class="btn" type="button" data-act="new" data-date="' + esc(target) + '">Formulario</button>' +
       '</form>' +
       '<p class="hint">' +
         '<code>#area</code> &middot; dia (<code>hoy</code>, <code>manana</code>, <code>mar</code>, <code>25/08</code>) &middot; ' +
@@ -244,6 +260,99 @@
     }).join('') + '</div>';
   }
 
+  // ------------------------------------------------------------- calendario
+
+  var HOUR_PX = 52;              // alto de una hora en el calendario
+  var DIA_REFERENCIA = 12 * 60;  // con cuanto se compara la barra de ocupacion
+
+  function renderCalendar(dates, weekActs) {
+    var rango = Logic.calendarRange(weekActs);
+    var pxPorMin = HOUR_PX / 60;
+    var alto = (rango.endHour - rango.startHour) * HOUR_PX;
+    var loads = Logic.minutesByDay(weekActs, dates);
+    var today = Logic.todayISO();
+
+    var horas = '';
+    for (var h = rango.startHour; h < rango.endHour; h++) {
+      horas += '<div class="cal-hour" style="top:' + ((h - rango.startHour) * HOUR_PX) + 'px">' +
+        Logic.pad(h) + ':00</div>';
+    }
+
+    var cabeceras = dates.map(function (d, i) {
+      var pct = Math.min(100, Math.round(loads[i] / DIA_REFERENCIA * 100));
+      return '<div class="cal-dh' + (d === today ? ' today' : '') + '">' +
+        '<div class="cal-dh-top"><b>' + esc(Logic.DAY_SHORT[i]) + '</b> ' +
+          '<span class="muted">' + esc(Logic.parseISO(d).getDate()) + '</span></div>' +
+        '<div class="cal-dh-load">' + (loads[i] ? esc(Logic.formatMinutes(loads[i])) : 'libre') + '</div>' +
+        '<div class="bar"><span class="done" style="width:' + pct + '%"></span></div>' +
+      '</div>';
+    }).join('');
+
+    // Las actividades sin hora van en su propia fila de la grilla y no dentro
+    // de la columna: si van adentro, empujan los bloques y dejan de calzar con
+    // las horas del margen.
+    var haySinHora = weekActs.some(function (a) { return !a.time; });
+    var filaSinHora = !haySinHora ? '' :
+      '<div class="cal-nohoras">' +
+        '<div class="cal-gutter-label">sin hora</div>' +
+        dates.map(function (d) {
+          var chips = weekActs.filter(function (a) { return a.date === d && !a.time; });
+          return '<div class="cal-nohora">' + chips.map(function (a) {
+            var ar = areaById(a.areaId);
+            return '<button class="chip' + (a.done ? ' done' : '') + '" style="--area:' + color(ar.color) + '"' +
+              ' data-act="edit" data-id="' + esc(a.id) + '">' + esc(a.title) + '</button>';
+          }).join('') + '</div>';
+        }).join('') +
+      '</div>';
+
+    var columnas = dates.map(function (d) {
+      var delDia = weekActs.filter(function (a) { return a.date === d; });
+
+      var bloques = Logic.layoutDay(delDia).map(function (b) {
+        var a = b.item;
+        var ar = areaById(a.areaId);
+        var top = (b.start - rango.startHour * 60) * pxPorMin;
+        var alt = Math.max(18, (b.end - b.start) * pxPorMin);
+        var ancho = 100 / b.cols;
+        return '<div class="cal-block' + (a.done ? ' done' : '') + '"' +
+          ' style="--area:' + color(ar.color) + ';top:' + top.toFixed(1) + 'px;height:' + alt.toFixed(1) + 'px;' +
+            'left:' + (b.col * ancho).toFixed(2) + '%;width:' + ancho.toFixed(2) + '%"' +
+          ' data-act="edit" data-id="' + esc(a.id) + '" tabindex="0" role="button"' +
+          ' title="' + esc(a.time + ' ' + a.title + ' (' + Logic.formatMinutes(a.minutes) + ')') + '">' +
+          '<span class="t">' + esc(a.title) + '</span>' +
+          '<span class="h">' + esc(a.time) + '</span>' +
+        '</div>';
+      }).join('');
+
+      return '<div class="cal-col' + (d === today ? ' today' : '') + '">' +
+        '<div class="cal-slots" style="height:' + alto + 'px">' + bloques +
+          (d === today ? lineaAhora(rango, pxPorMin) : '') +
+        '</div>' +
+        '<button class="add-day" data-act="new" data-date="' + esc(d) + '">+</button>' +
+      '</div>';
+    }).join('');
+
+    return '' +
+      '<div class="cal-wrap">' +
+        '<div class="cal">' +
+          '<div class="cal-head"><div class="cal-gutter"></div>' + cabeceras + '</div>' +
+          filaSinHora +
+          '<div class="cal-body">' +
+            '<div class="cal-gutter" style="height:' + alto + 'px">' + horas + '</div>' +
+            columnas +
+          '</div>' +
+        '</div>' +
+      '</div>';
+  }
+
+  function lineaAhora(rango, pxPorMin) {
+    var ahora = new Date();
+    var min = ahora.getHours() * 60 + ahora.getMinutes();
+    if (min < rango.startHour * 60 || min > rango.endHour * 60) return '';
+    var top = (min - rango.startHour * 60) * pxPorMin;
+    return '<div class="cal-now" style="top:' + top.toFixed(1) + 'px" aria-hidden="true"></div>';
+  }
+
   function renderRoutines() {
     var rows = state.routines.map(function (r) {
       var ar = areaById(r.areaId);
@@ -288,38 +397,67 @@
 
   // ---------------------------------------------------------------- modales
 
+  var NUEVA_AREA = '__nueva__';
+
   function areaOptions(selected) {
     return state.areas.map(function (a) {
       return '<option value="' + esc(a.id) + '"' + (a.id === selected ? ' selected' : '') + '>' +
         esc(a.label) + '</option>';
-    }).join('');
+    }).join('') +
+    '<option value="' + NUEVA_AREA + '">+ Crear categoria nueva</option>';
+  }
+
+  /** Campo de categoria con la opcion de crear una ahi mismo. */
+  function campoCategoria(selected) {
+    return '' +
+      '<div class="field">' +
+        '<label for="f-area">Categoria</label>' +
+        '<select id="f-area" name="areaId">' + areaOptions(selected) + '</select>' +
+        '<div class="nueva-cat" id="nueva-cat" hidden>' +
+          '<input type="text" name="newAreaLabel" placeholder="Nombre de la categoria nueva" maxlength="40">' +
+          '<input type="color" name="newAreaColor" value="#8a8f98" aria-label="Color de la categoria">' +
+        '</div>' +
+      '</div>';
+  }
+
+  function selectorDias(marcados) {
+    return '' +
+      '<div class="field">' +
+        '<label>Dias de esta semana</label>' +
+        '<div class="days">' + Logic.DAY_SHORT.map(function (d, i) {
+          return '<label class="day-chip"><input type="checkbox" name="dow" value="' + i + '"' +
+            (marcados.indexOf(i) !== -1 ? ' checked' : '') + '><span>' + esc(d) + '</span></label>';
+        }).join('') + '</div>' +
+      '</div>';
   }
 
   function renderActivityModal(m) {
     var a = m.activity;
     var isNew = !a.id;
+    var diaBase = Logic.weekdayIndex(a.date || Logic.todayISO());
+
     return modalShell(isNew ? 'Nueva actividad' : 'Editar actividad',
       '<form id="activity-form" autocomplete="off">' +
         // ojo: no llamar "id" a un control, sombrearia form.id (named getter del DOM)
         '<input type="hidden" name="actId" value="' + esc(a.id || '') + '">' +
         '<div class="field"><label for="f-title">Que vas a hacer</label>' +
-          '<input type="text" id="f-title" name="title" required value="' + esc(a.title || '') + '"></div>' +
-        '<div class="grid2">' +
-          '<div class="field"><label for="f-area">Area</label>' +
-            '<select id="f-area" name="areaId">' + areaOptions(a.areaId) + '</select></div>' +
-          '<div class="field"><label for="f-date">Dia</label>' +
-            '<input type="date" id="f-date" name="date" value="' + esc(a.date || Logic.todayISO()) + '"></div>' +
-        '</div>' +
+          '<input type="text" id="f-title" name="title" required maxlength="120" ' +
+            'placeholder="Ej: Cena con Ayleen" value="' + esc(a.title || '') + '"></div>' +
+        campoCategoria(a.areaId) +
+        (isNew
+          ? selectorDias([diaBase])
+          : '<div class="field"><label for="f-date">Dia</label>' +
+              '<input type="date" id="f-date" name="date" value="' + esc(a.date || Logic.todayISO()) + '"></div>') +
         '<div class="grid2">' +
           '<div class="field"><label for="f-time">Hora (opcional)</label>' +
             '<input type="time" id="f-time" name="time" value="' + esc(a.time || '') + '"></div>' +
-          '<div class="field"><label for="f-min">Duracion (min)</label>' +
-            '<input type="number" id="f-min" name="minutes" min="0" step="5" value="' + esc(a.minutes || 60) + '"></div>' +
+          '<div class="field"><label for="f-min">Cuanto tiempo</label>' +
+            '<select id="f-min" name="minutes">' + opcionesDuracion(a.minutes || 60) + '</select></div>' +
         '</div>' +
-        '<div class="field"><label for="f-notes">Notas</label>' +
+        '<div class="field"><label for="f-notes">Notas (opcional)</label>' +
           '<textarea id="f-notes" name="notes" rows="2">' + esc(a.notes || '') + '</textarea></div>' +
         (isNew
-          ? '<label class="check"><input type="checkbox" name="repeat"> Repetir cada semana este mismo dia</label>'
+          ? '<label class="check"><input type="checkbox" name="repeat"> Repetir todas las semanas en esos dias</label>'
           : (a.routineId ? '<p class="hint">Viene de una rutina semanal. Editarla aqui solo cambia esta semana.</p>' : '')) +
         '<div class="modal-actions">' +
           (isNew ? '' : '<button type="button" class="btn danger" data-act="del" data-id="' + esc(a.id) + '">Eliminar</button>') +
@@ -328,6 +466,18 @@
           '<button type="submit" class="btn primary">Guardar</button>' +
         '</div>' +
       '</form>');
+  }
+
+  var DURACIONES = [15, 30, 45, 60, 90, 120, 180, 240, 300, 360, 480];
+
+  function opcionesDuracion(actual) {
+    var lista = DURACIONES.slice();
+    if (lista.indexOf(actual) === -1) lista.push(actual);
+    lista.sort(function (x, y) { return x - y; });
+    return lista.map(function (m) {
+      return '<option value="' + m + '"' + (m === actual ? ' selected' : '') + '>' +
+        esc(Logic.formatMinutes(m)) + '</option>';
+    }).join('');
   }
 
   function renderAreasModal() {
@@ -425,7 +575,7 @@
       renderQuick(dates) +
       renderBalance(summary) +
       renderWarnings(warnings) +
-      renderWeek(dates, weekActs) +
+      (view.vista === 'calendario' ? renderCalendar(dates, weekActs) : renderWeek(dates, weekActs)) +
       renderRoutines() +
       renderFooter() +
       renderModal();
@@ -500,47 +650,91 @@
     });
   }
 
+  function valor(form, name) {
+    return form.elements[name] ? form.elements[name].value : '';
+  }
+
   function saveActivityForm(form) {
-    var data = {};
-    ['actId', 'title', 'areaId', 'date', 'time', 'minutes', 'notes'].forEach(function (k) {
-      data[k] = form.elements[k] ? form.elements[k].value : '';
-    });
-    var title = data.title.trim();
-    if (!title) { toast('Falta el nombre'); return; }
-    if (!Logic.isISO(data.date)) { toast('Fecha invalida'); return; }
+    var title = valor(form, 'title').trim();
+    if (!title) { toast('Falta el nombre de la actividad'); return; }
 
-    var minutes = Math.max(0, Math.round(Number(data.minutes) || 0));
-    var time = /^([01]\d|2[0-3]):[0-5]\d$/.test(data.time) ? data.time : null;
-    var campos = {
-      title: title, areaId: data.areaId, date: data.date,
-      time: time, minutes: minutes, notes: data.notes
-    };
+    var minutes = Math.max(0, Math.round(Number(valor(form, 'minutes')) || 0));
+    var tRaw = valor(form, 'time');
+    var time = /^([01]\d|2[0-3]):[0-5]\d$/.test(tRaw) ? tRaw : null;
+    var notes = valor(form, 'notes');
+    var actId = valor(form, 'actId');
 
-    if (data.actId) {
-      var id = data.actId;
-      view.modal = null;
-      commit(function (s) {
-        s.activities.forEach(function (a) { if (a.id === id) Object.assign(a, campos); });
-      });
-    } else {
-      var nueva = Object.assign({
-        id: Logic.uid('act'), done: false, routineId: null,
-        createdAt: new Date().toISOString()
-      }, campos);
-      var rutina = null;
-      if (form.elements.repeat && form.elements.repeat.checked) {
-        rutina = {
-          id: Logic.uid('rut'), title: title, areaId: data.areaId,
-          weekday: Logic.weekdayIndex(data.date), time: time,
-          minutes: minutes, notes: data.notes, active: true
-        };
-      }
-      view.modal = null;
-      commit(function (s) {
-        s.activities = s.activities.concat([nueva]);
-        if (rutina) s.routines = s.routines.concat([rutina]);
-      });
+    // La categoria puede ser una que se esta creando en este mismo formulario.
+    var areaId = valor(form, 'areaId');
+    var areaNueva = null;
+    if (areaId === NUEVA_AREA) {
+      var label = valor(form, 'newAreaLabel').trim();
+      if (!label) { toast('Ponle un nombre a la categoria nueva'); return; }
+      areaNueva = {
+        id: slug(label, state.areas.map(function (x) { return x.id; })),
+        label: label,
+        color: color(valor(form, 'newAreaColor')),
+        goalMinutes: 0
+      };
+      areaId = areaNueva.id;
     }
+
+    function conCategoria(s) {
+      if (areaNueva && !s.areas.some(function (x) { return x.id === areaNueva.id; })) {
+        s.areas = s.areas.concat([areaNueva]);
+      }
+    }
+
+    if (actId) {
+      var date = valor(form, 'date');
+      if (!Logic.isISO(date)) { toast('Fecha invalida'); return; }
+      var campos = { title: title, areaId: areaId, date: date, time: time, minutes: minutes, notes: notes };
+      view.modal = null;
+      commit(function (s) {
+        conCategoria(s);
+        s.activities.forEach(function (a) { if (a.id === actId) Object.assign(a, campos); });
+      });
+      return;
+    }
+
+    var dows = Array.prototype.map.call(
+      form.querySelectorAll('input[name="dow"]:checked'),
+      function (el) { return Number(el.value); }
+    );
+    if (!dows.length) { toast('Elige al menos un dia'); return; }
+
+    var repetir = !!(form.elements.repeat && form.elements.repeat.checked);
+    var rutinas = [];
+    var nuevas = [];
+    dows.forEach(function (dow) {
+      var rid = null;
+      if (repetir) {
+        rid = Logic.uid('rut');
+        rutinas.push({
+          id: rid, title: title, areaId: areaId, weekday: dow,
+          time: time, minutes: minutes, notes: notes, active: true
+        });
+      }
+      nuevas.push({
+        id: Logic.uid('act'), title: title, areaId: areaId,
+        date: Logic.addDays(view.week, dow), time: time, minutes: minutes,
+        done: false, notes: notes, routineId: rid, createdAt: new Date().toISOString()
+      });
+    });
+
+    view.modal = null;
+    commit(function (s) {
+      conCategoria(s);
+      // los filtros dejan la funcion idempotente: se puede reaplicar sobre lo
+      // que venga de la base sin duplicar nada
+      s.routines = s.routines.concat(rutinas.filter(function (r) {
+        return !s.routines.some(function (x) { return x.id === r.id; });
+      }));
+      s.activities = s.activities.concat(nuevas.filter(function (n) {
+        return !s.activities.some(function (x) { return x.id === n.id; });
+      }));
+    });
+    if (dows.length > 1) toast('Agregado en ' + dows.length + ' dias');
   }
 
   /** Lee el formulario de areas sin guardarlo todavia. */
@@ -673,6 +867,14 @@
         s.routines.forEach(function (r) { if (r.id === rid) r.active = activa; });
       });
       if (activa) ensureRoutines();
+    } else if (t.name === 'areaId') {
+      // mostrar los campos de categoria nueva sin volver a renderizar (se
+      // perderia lo que ya escribio en el formulario)
+      var caja = document.getElementById('nueva-cat');
+      if (caja) {
+        caja.hidden = t.value !== NUEVA_AREA;
+        if (!caja.hidden) caja.querySelector('[name="newAreaLabel"]').focus();
+      }
     } else if (t.id === 'import-file' && t.files && t.files[0]) {
       importFile(t.files[0]);
     }
@@ -703,6 +905,10 @@
       view.week = Logic.startOfWeek(Logic.todayISO());
       render();
       ensureRoutines();
+    } else if (act === 'vista') {
+      view.vista = btn.getAttribute('data-vista') === 'calendario' ? 'calendario' : 'semana';
+      try { localStorage.setItem(VISTA_KEY, view.vista); } catch (e) { /* sin persistir la preferencia */ }
+      render();
     } else if (act === 'new') {
       view.modal = {
         type: 'activity',

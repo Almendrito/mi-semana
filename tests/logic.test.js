@@ -303,6 +303,82 @@ test('overlaps ignora actividades sin hora', function () {
   assert.strictEqual(L.overlaps(list).length, 0);
 });
 
+// ------------------------------------------------------------ calendario
+
+test('timeToMin convierte la hora a minutos del dia', function () {
+  assert.strictEqual(L.timeToMin('00:00'), 0);
+  assert.strictEqual(L.timeToMin('09:30'), 570);
+  assert.strictEqual(L.timeToMin('23:59'), 1439);
+});
+
+test('layoutDay deja en una sola columna lo que no se pisa', function () {
+  var lista = [
+    act({ id: 'a', areaId: 'pareja', date: DATES[0], time: '09:00', minutes: 60 }),
+    act({ id: 'b', areaId: 'pareja', date: DATES[0], time: '10:00', minutes: 60 })
+  ];
+  var out = L.layoutDay(lista);
+  assert.strictEqual(out.length, 2);
+  assert.deepStrictEqual(out.map(function (b) { return [b.col, b.cols]; }), [[0, 1], [0, 1]]);
+  assert.strictEqual(out[0].start, 540);
+  assert.strictEqual(out[0].end, 600);
+});
+
+test('layoutDay pone lado a lado lo que se pisa', function () {
+  var lista = [
+    act({ id: 'a', areaId: 'pareja', date: DATES[0], time: '09:00', minutes: 120 }),
+    act({ id: 'b', areaId: 'familia', date: DATES[0], time: '09:30', minutes: 60 }),
+    act({ id: 'c', areaId: 'personal', date: DATES[0], time: '10:00', minutes: 30 })
+  ];
+  var out = L.layoutDay(lista);
+  var porId = {};
+  out.forEach(function (b) { porId[b.id] = b; });
+  assert.strictEqual(porId.a.cols, 3, 'las tres se pisan entre si');
+  assert.strictEqual(porId.a.col, 0);
+  assert.strictEqual(porId.b.col, 1);
+  assert.strictEqual(porId.c.col, 2);
+});
+
+test('layoutDay reutiliza la columna cuando la anterior ya termino', function () {
+  var lista = [
+    act({ id: 'a', areaId: 'pareja', date: DATES[0], time: '09:00', minutes: 180 }),
+    act({ id: 'b', areaId: 'familia', date: DATES[0], time: '09:00', minutes: 60 }),
+    act({ id: 'c', areaId: 'personal', date: DATES[0], time: '10:30', minutes: 60 })
+  ];
+  var porId = {};
+  L.layoutDay(lista).forEach(function (b) { porId[b.id] = b; });
+  assert.strictEqual(porId.c.col, porId.b.col, 'c entra en la columna de b, que ya termino');
+  assert.notStrictEqual(porId.a.col, porId.b.col, 'a y b se pisan, no pueden compartir columna');
+  assert.strictEqual(porId.a.cols, 2, 'el grupo necesita dos columnas, no tres');
+});
+
+test('layoutDay ignora lo que no tiene hora y no se pasa de medianoche', function () {
+  var lista = [
+    act({ id: 'a', areaId: 'pareja', date: DATES[0], minutes: 60 }),
+    act({ id: 'b', areaId: 'pareja', date: DATES[0], time: '23:00', minutes: 180 })
+  ];
+  var out = L.layoutDay(lista);
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0].end, 24 * 60);
+});
+
+test('layoutDay le da alto minimo a las actividades de cero minutos', function () {
+  var out = L.layoutDay([act({ id: 'a', areaId: 'pareja', date: DATES[0], time: '09:00', minutes: 0 })]);
+  assert.strictEqual(out[0].end - out[0].start, 15);
+});
+
+test('calendarRange usa el horario por defecto y lo estira si hace falta', function () {
+  assert.deepStrictEqual(L.calendarRange([]), { startHour: 7, endHour: 22 });
+  var temprano = [act({ id: 'a', areaId: 'pareja', date: DATES[0], time: '06:15', minutes: 30 })];
+  assert.strictEqual(L.calendarRange(temprano).startHour, 6);
+  var tarde = [act({ id: 'b', areaId: 'pareja', date: DATES[0], time: '22:30', minutes: 60 })];
+  assert.strictEqual(L.calendarRange(tarde).endHour, 24);
+});
+
+test('calendarRange nunca se sale del dia', function () {
+  var r = L.calendarRange([act({ id: 'a', areaId: 'pareja', date: DATES[0], time: '23:50', minutes: 300 })]);
+  assert.ok(r.startHour >= 0 && r.endHour <= 24 && r.endHour > r.startHour);
+});
+
 // -------------------------------------------------------------- storage
 
 test('normalize rellena un estado vacio con los valores por defecto', function () {

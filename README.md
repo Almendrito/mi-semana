@@ -73,11 +73,36 @@ Llamar a mi mama #familia 25/08
 - `cada martes` / `todos los domingos`: crea una **rutina** que se agenda sola
   cada semana.
 
-Tambien esta el boton `+...` para el formulario completo (notas incluidas).
+**Formulario.** El boton **Formulario** (y el `+` de cada dia) abre el alta
+completa, que es lo mas comodo para agendar de verdad:
 
-**La semana.** Siete tarjetas, una por dia, con el total de horas de cada una.
-El check marca lo hecho; al hacer clic en la actividad se edita; la `x` la borra.
-Las flechas de arriba cambian de semana.
+- **Que vas a hacer**: el titulo.
+- **Categoria**: la lista de siempre, y al final **+ Crear categoria nueva**,
+  que abre ahi mismo el nombre y el color sin salir del formulario.
+- **Dias de esta semana**: se marcan varios de una vez. "Gimnasio lunes,
+  miercoles y viernes" es un solo guardado, no tres.
+- **Hora** (opcional) y **cuanto tiempo** (lista de duraciones tipicas).
+- **Repetir todas las semanas en esos dias**: crea la rutina para cada dia
+  marcado.
+
+## Las dos vistas
+
+Arriba a la derecha se cambia entre **Lista** y **Calendario**; la eleccion
+queda guardada para la proxima vez.
+
+- **Lista**: siete tarjetas, una por dia, con el total de horas de cada una.
+- **Calendario**: la semana por horas, para ver de un vistazo que tan ocupada
+  esta. Cada actividad es un bloque del alto de su duracion y del color de su
+  categoria; lo que se pisa aparece lado a lado; en la cabecera de cada dia va
+  el total y una barra de ocupacion (comparada contra 12 horas); una linea roja
+  marca la hora actual. Lo que no tiene hora va en la fila "sin hora" de arriba.
+  El rango horario se ajusta solo: parte en 7:00-22:00 y se estira si tienes
+  algo mas temprano o mas tarde.
+
+En las dos vistas se hace clic en una actividad para editarla.
+
+**La semana.** El check marca lo hecho; al hacer clic en la actividad se edita;
+la `x` la borra. Las flechas de arriba cambian de semana.
 
 **Balance y avisos.** Las tarjetas de arriba comparan lo hecho contra la meta
 semanal de cada area (barra clara: lo agendado; barra llena: lo hecho). Debajo
@@ -88,9 +113,11 @@ de 12 horas encima.
 agenda solo al abrir cada semana nueva. Se pueden pausar sin borrarlas. Si
 borras una instancia suelta, esa semana no vuelve a aparecer.
 
-**Areas y metas.** Boton "Areas y metas" abajo: nombre, color y horas semanales
-de cada una. Se pueden agregar y eliminar (al eliminar, sus actividades pasan a
-la primera area).
+**Categorias y metas.** Boton "Areas y metas" abajo: nombre, color y horas
+semanales de cada una. Se pueden agregar y eliminar (al eliminar, sus
+actividades pasan a la primera categoria). Las categorias creadas desde el
+formulario de alta parten con meta 0, o sea sin aviso, hasta que les pongas una
+aqui.
 
 **Respaldo.** "Exportar copia" baja un `.json` con todo; "Importar" lo restaura
 (en modo nube reemplaza tambien lo que ve el celular).
@@ -130,7 +157,8 @@ tests/logic.test.js  pruebas de logic.js y storage.js
 manifest.json, sw.js, icon.svg   para instalarla como app
 ```
 
-Pruebas (57, incluidas las de sincronizacion y login con un Supabase falso):
+Pruebas (65, incluidas las del calendario y las de sincronizacion y login
+contra un Supabase falso):
 
 ```bash
 node tests/logic.test.js
