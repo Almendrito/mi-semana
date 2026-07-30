@@ -39,8 +39,7 @@
   var view = {
     week: Logic.startOfWeek(Logic.todayISO()),
     modal: null,             // {type:'activity'|'areas', ...}
-    vista: vistaGuardada(),  // 'semana' | 'calendario'
-    quick: ''
+    vista: vistaGuardada()   // 'semana' | 'calendario'
   };
 
   // ------------------------------------------------------------- utilidades
@@ -175,20 +174,12 @@
       'dispositivo y no se puede editar. <button class="btn small" data-act="reintentar">Reintentar</button></div>';
   }
 
-  function renderQuick(dates) {
+  function renderAddBar(dates) {
     var today = Logic.todayISO();
     var target = dates.indexOf(today) !== -1 ? today : dates[0];
-    return '' +
-      '<form class="quick" id="quick-form" autocomplete="off">' +
-        '<input type="text" id="quick" name="quick" placeholder="Ej: Cena con Ayleen #pareja vie 20:30 2h" value="' + esc(view.quick) + '">' +
-        '<button class="btn primary" type="submit">Agregar</button>' +
-        '<button class="btn" type="button" data-act="new" data-date="' + esc(target) + '">Formulario</button>' +
-      '</form>' +
-      '<p class="hint">' +
-        '<code>#area</code> &middot; dia (<code>hoy</code>, <code>manana</code>, <code>mar</code>, <code>25/08</code>) &middot; ' +
-        'hora con dos puntos (<code>20:30</code>) &middot; duracion (<code>90min</code>, <code>1.5h</code>) &middot; ' +
-        '<code>cada martes</code> para que se repita.' +
-      '</p>';
+    return '<div class="addbar">' +
+      '<button class="btn primary" data-act="new" data-date="' + esc(target) + '">+ Agregar actividad</button>' +
+    '</div>';
   }
 
   function renderBalance(summary) {
@@ -374,8 +365,8 @@
         '<span class="sub muted">se agendan solas cada semana</span></div>' +
       (state.routines.length
         ? '<div class="rows">' + rows + '</div>'
-        : '<div class="empty">Sin rutinas. Escribe <code>cada martes</code> en el agregado rapido, ' +
-          'o marca "repetir cada semana" al crear una actividad.</div>');
+        : '<div class="empty">Sin rutinas. Marca "Repetir todas las semanas" al agregar una ' +
+          'actividad y se va a agendar sola cada semana.</div>');
   }
 
   function renderFooter() {
@@ -572,7 +563,7 @@
     root.innerHTML =
       renderTopbar(dates) +
       renderOfflineBanner() +
-      renderQuick(dates) +
+      renderAddBar(dates) +
       renderBalance(summary) +
       renderWarnings(warnings) +
       (view.vista === 'calendario' ? renderCalendar(dates, weekActs) : renderWeek(dates, weekActs)) +
@@ -590,47 +581,6 @@
   }
 
   // -------------------------------------------------------------- acciones
-
-  function addFromQuick(text) {
-    var parsed = Logic.parseQuickAdd(text, {
-      areas: state.areas,
-      today: Logic.todayISO(),
-      weekStart: view.week
-    });
-    if (!parsed.title) { toast('Falta el nombre de la actividad'); return; }
-
-    if (parsed.repeat) {
-      var routine = {
-        id: Logic.uid('rut'),
-        title: parsed.title,
-        areaId: parsed.areaId,
-        weekday: parsed.weekday,
-        time: parsed.time,
-        minutes: parsed.minutes,
-        notes: '',
-        active: true
-      };
-      view.quick = '';
-      commit(function (s) { s.routines = s.routines.concat([routine]); }, '#quick');
-      toast('Rutina creada: cada ' + Logic.DAY_NAMES[routine.weekday].toLowerCase());
-      ensureRoutines();
-    } else {
-      var act = {
-        id: Logic.uid('act'),
-        title: parsed.title,
-        areaId: parsed.areaId,
-        date: parsed.date,
-        time: parsed.time,
-        minutes: parsed.minutes,
-        done: false,
-        notes: '',
-        routineId: null,
-        createdAt: new Date().toISOString()
-      };
-      view.quick = '';
-      commit(function (s) { s.activities = s.activities.concat([act]); }, '#quick');
-    }
-  }
 
   function findActivity(id) {
     for (var i = 0; i < state.activities.length; i++) {
@@ -820,10 +770,7 @@
     var form = ev.target;
     // getAttribute y no form.id: un control llamado "id" sombrearia la propiedad
     var which = form.getAttribute('id');
-    if (which === 'quick-form') {
-      ev.preventDefault();
-      addFromQuick(form.elements.quick.value);
-    } else if (which === 'activity-form') {
+    if (which === 'activity-form') {
       ev.preventDefault();
       saveActivityForm(form);
     } else if (which === 'areas-form') {
@@ -845,10 +792,6 @@
         renderAuth();
       });
     }
-  });
-
-  document.addEventListener('input', function (ev) {
-    if (ev.target.id === 'quick') view.quick = ev.target.value;
   });
 
   document.addEventListener('change', function (ev) {

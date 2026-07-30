@@ -56,25 +56,8 @@ sintetico e inmutable: `mateo` -> `mateo@almendrito.github.io`
 
 ## Como se usa
 
-**Agregado rapido.** Una linea basta:
-
-```
-Cena con Ayleen #pareja vie 20:30 2h
-Reunion GOLEM #profesional mie 15:00 1.5h
-Gimnasio #personal cada martes 19:00 45min
-Llamar a mi mama #familia 25/08
-```
-
-- `#area`: `#pareja`, `#familia`, `#prof`... basta el prefijo si no es ambiguo.
-- Dia: `hoy`, `manana`, `pasado`, `lun`..`dom` (el de la semana que estas viendo)
-  o `25/08`. Si no pones nada, es hoy.
-- Hora: **siempre con dos puntos** (`20:30`, `9:00`).
-- Duracion: `2h`, `1.5h`, `45min`. Por defecto 1 hora.
-- `cada martes` / `todos los domingos`: crea una **rutina** que se agenda sola
-  cada semana.
-
-**Formulario.** El boton **Formulario** (y el `+` de cada dia) abre el alta
-completa, que es lo mas comodo para agendar de verdad:
+**Agregar.** Todo se agrega por el mismo formulario: el boton **+ Agregar
+actividad** de arriba, o el `+` de un dia (que llega con ese dia ya marcado):
 
 - **Que vas a hacer**: el titulo.
 - **Categoria**: la lista de siempre, y al final **+ Crear categoria nueva**,
@@ -99,10 +82,8 @@ queda guardada para la proxima vez.
   El rango horario se ajusta solo: parte en 7:00-22:00 y se estira si tienes
   algo mas temprano o mas tarde.
 
-En las dos vistas se hace clic en una actividad para editarla.
-
-**La semana.** El check marca lo hecho; al hacer clic en la actividad se edita;
-la `x` la borra. Las flechas de arriba cambian de semana.
+En las dos vistas se hace clic en una actividad para editarla. En la lista, el
+check marca lo hecho y la `x` la borra. Las flechas de arriba cambian de semana.
 
 **Balance y avisos.** Las tarjetas de arriba comparan lo hecho contra la meta
 semanal de cada area (barra clara: lo agendado; barra llena: lo hecho). Debajo
@@ -149,7 +130,7 @@ sola.
 index.html        estructura minima, carga los scripts en orden
 css/styles.css    tema claro/oscuro segun el sistema, mobile-first
 js/config.js      URL y key de Supabase (vacio = modo local)
-js/logic.js       logica pura: fechas, parseo de texto, resumen, rutinas
+js/logic.js       logica pura: fechas, resumen, rutinas, layout del calendario
 js/storage.js     unica capa de persistencia: store local y store Supabase
 js/app.js         UI: render completo + delegacion de eventos
 supabase/schema.sql  tabla, politicas RLS y trigger (idempotente)
@@ -157,7 +138,7 @@ tests/logic.test.js  pruebas de logic.js y storage.js
 manifest.json, sw.js, icon.svg   para instalarla como app
 ```
 
-Pruebas (65, incluidas las del calendario y las de sincronizacion y login
+Pruebas (52, incluidas las del calendario y las de sincronizacion y login
 contra un Supabase falso):
 
 ```bash

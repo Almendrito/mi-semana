@@ -16,27 +16,6 @@
   var DAY_SHORT = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'];
   var MONTH_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
-  var DAY_TOKENS = {
-    lun: 0, lu: 0, lunes: 0,
-    mar: 1, ma: 1, martes: 1,
-    mie: 2, mi: 2, mier: 2, miercoles: 2,
-    jue: 3, ju: 3, jueves: 3,
-    vie: 4, vi: 4, viernes: 4,
-    sab: 5, sa: 5, sabado: 5,
-    dom: 6, do: 6, domingo: 6
-  };
-
-  /** Indice de dia, tolerando el plural de "los domingos" / "los sabados". */
-  function dayTokenIndex(tok) {
-    if (Object.prototype.hasOwnProperty.call(DAY_TOKENS, tok)) return DAY_TOKENS[tok];
-    var singular = tok.replace(/s$/, '');
-    if (Object.prototype.hasOwnProperty.call(DAY_TOKENS, singular)) return DAY_TOKENS[singular];
-    return null;
-  }
-
-  var HOUR_UNITS = { h: 1, hr: 1, hrs: 1, hora: 1, horas: 1 };
-  var MIN_UNITS = { m: 1, min: 1, mins: 1, minuto: 1, minutos: 1 };
-
   // ---------------------------------------------------------------- fechas
 
   function pad(n) { return (n < 10 ? '0' : '') + n; }
@@ -124,141 +103,6 @@
   function uid(prefix) {
     return (prefix || 'id') + '-' + Date.now().toString(36) + '-' +
       Math.random().toString(36).slice(2, 8);
-  }
-
-  /** Resuelve un token a un id de area: id exacto, luego prefijo unico (>=3). */
-  function matchArea(areas, token) {
-    var t = norm(token);
-    if (!t) return null;
-    var i, a;
-    for (i = 0; i < areas.length; i++) {
-      a = areas[i];
-      if (norm(a.id) === t || norm(a.label) === t) return a.id;
-    }
-    if (t.length < 3) return null;
-    var hit = null;
-    for (i = 0; i < areas.length; i++) {
-      a = areas[i];
-      if (norm(a.id).indexOf(t) === 0 || norm(a.label).indexOf(t) === 0) {
-        if (hit && hit !== a.id) return null; // ambiguo
-        hit = a.id;
-      }
-    }
-    return hit;
-  }
-
-  // -------------------------------------------------------------- quick add
-
-  /**
-   * Convierte una linea de texto en una actividad.
-   *   "Cena con Ayleen #pareja mar 20:00 1.5h"
-   *   "Gimnasio #personal cada lunes 45min"
-   * Reglas: la hora SIEMPRE lleva ':' (20:00); '2h' / '90min' es duracion.
-   * opts: { areas, today, weekStart, defaultAreaId, defaultMinutes }
-   * Devuelve { title, areaId, date, time, minutes, repeat, weekday }.
-   */
-  function parseQuickAdd(text, opts) {
-    opts = opts || {};
-    var areas = opts.areas || [];
-    var today = opts.today || todayISO();
-    var weekStart = opts.weekStart || startOfWeek(today);
-    var words = String(text || '').trim().split(/\s+/).filter(Boolean);
-
-    var areaId = null, date = null, time = null, minutes = null;
-    var repeat = false, weekday = null;
-    var rest = [];
-
-    function readUnit(value, unit) {
-      var u = norm(unit);
-      if (HOUR_UNITS[u]) return Math.round(parseFloat(String(value).replace(',', '.')) * 60);
-      if (MIN_UNITS[u]) return Math.round(parseFloat(String(value).replace(',', '.')));
-      return null;
-    }
-
-    for (var i = 0; i < words.length; i++) {
-      var raw = words[i];
-      var clean = raw.replace(/[.,;:!?]+$/, '');
-      var n = norm(clean);
-      if (!n) { rest.push(raw); continue; }
-
-      // #area / @area
-      if ((raw[0] === '#' || raw[0] === '@') && areaId === null) {
-        var found = matchArea(areas, n.slice(1));
-        if (found) { areaId = found; continue; }
-      }
-
-      // "cada martes" / "todos los martes"
-      if ((n === 'cada' || n === 'todos' || n === 'todas') && !repeat) {
-        var j = i + 1;
-        if (j < words.length && /^(los|las|el|la)$/.test(norm(words[j]))) j++;
-        var dayTok = norm(String(words[j] || '').replace(/[.,;:!?]+$/, ''));
-        var dayIdx = dayTokenIndex(dayTok);
-        if (dayIdx !== null) {
-          repeat = true;
-          weekday = dayIdx;
-          i = j;
-          continue;
-        }
-        if (dayTok === 'semana' || dayTok === 'dia' || dayTok === 'dias') {
-          repeat = true;
-          i = j;
-          continue;
-        }
-      }
-
-      // hora HH:MM
-      if (time === null && /^([01]?\d|2[0-3]):[0-5]\d$/.test(n)) {
-        var hp = n.split(':');
-        time = pad(Number(hp[0])) + ':' + hp[1];
-        continue;
-      }
-
-      // duracion pegada: 1.5h / 90min
-      var dur = /^(\d+(?:[.,]\d+)?)\s*([a-z]+)$/.exec(n);
-      if (minutes === null && dur) {
-        var v = readUnit(dur[1], dur[2]);
-        if (v !== null && v > 0) { minutes = v; continue; }
-      }
-      // duracion separada: "1.5 h"
-      if (minutes === null && /^\d+(?:[.,]\d+)?$/.test(n) && i + 1 < words.length) {
-        var v2 = readUnit(n, norm(words[i + 1]));
-        if (v2 !== null && v2 > 0) { minutes = v2; i++; continue; }
-      }
-
-      // dia relativo
-      if (date === null) {
-        if (n === 'hoy') { date = today; continue; }
-        if (n === 'manana') { date = addDays(today, 1); continue; }
-        if (n === 'pasado') { date = addDays(today, 2); continue; }
-        if (n === 'ayer') { date = addDays(today, -1); continue; }
-        if (Object.prototype.hasOwnProperty.call(DAY_TOKENS, n) && n.length >= 3) {
-          date = addDays(weekStart, DAY_TOKENS[n]);
-          continue;
-        }
-        var dm = /^(\d{1,2})[\/-](\d{1,2})$/.exec(n);
-        if (dm) {
-          var year = parseISO(today).getFullYear();
-          var cand = year + '-' + pad(Number(dm[2])) + '-' + pad(Number(dm[1]));
-          if (isISO(cand)) { date = cand; continue; }
-        }
-      }
-
-      rest.push(raw);
-    }
-
-    if (repeat && weekday === null) weekday = date ? weekdayIndex(date) : weekdayIndex(today);
-    if (repeat && date === null) date = addDays(weekStart, weekday);
-    if (!repeat && date === null) date = today;
-
-    return {
-      title: rest.join(' ').trim(),
-      areaId: areaId || opts.defaultAreaId || (areas[0] && areas[0].id) || 'personal',
-      date: date,
-      time: time,
-      minutes: minutes || opts.defaultMinutes || 60,
-      repeat: repeat,
-      weekday: repeat ? weekday : weekdayIndex(date)
-    };
   }
 
   // ------------------------------------------------------------- rutinas
@@ -519,8 +363,6 @@
     endTime: endTime,
     norm: norm,
     uid: uid,
-    matchArea: matchArea,
-    parseQuickAdd: parseQuickAdd,
     skipKey: skipKey,
     pendingRoutineActivities: pendingRoutineActivities,
     inWeek: inWeek,

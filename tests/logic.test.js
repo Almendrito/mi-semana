@@ -29,8 +29,7 @@ function testAsync(name, fn) {
 }
 
 var AREAS = S.DEFAULT_AREAS;
-var TODAY = '2026-07-29';   // miercoles
-var WEEK = '2026-07-27';    // lunes de esa semana
+var WEEK = '2026-07-27';    // lunes de una semana cualquiera
 
 // ------------------------------------------------------------------ fechas
 
@@ -70,110 +69,6 @@ test('formatMinutes y endTime', function () {
   assert.strictEqual(L.endTime('20:30', 90), '22:00');
   assert.strictEqual(L.endTime('23:30', 60), '00:30');  // pasa medianoche
   assert.strictEqual(L.endTime(null, 60), null);
-});
-
-// ------------------------------------------------------------------- areas
-
-test('matchArea: exacto, prefijo unico y ambiguo', function () {
-  assert.strictEqual(L.matchArea(AREAS, 'pareja'), 'pareja');
-  assert.strictEqual(L.matchArea(AREAS, 'par'), 'pareja');
-  assert.strictEqual(L.matchArea(AREAS, 'per'), 'personal');
-  assert.strictEqual(L.matchArea(AREAS, 'pro'), 'profesional');
-  assert.strictEqual(L.matchArea(AREAS, 'p'), null);   // demasiado corto
-  assert.strictEqual(L.matchArea(AREAS, 'xyz'), null);
-});
-
-test('matchArea ignora acentos y mayusculas', function () {
-  var areas = [{ id: 'academico', label: 'Académico' }];
-  assert.strictEqual(L.matchArea(areas, 'ACADEMICO'), 'academico');
-  assert.strictEqual(L.matchArea(areas, 'acadé'), 'academico');
-});
-
-// --------------------------------------------------------------- quick add
-
-function q(text) {
-  return L.parseQuickAdd(text, { areas: AREAS, today: TODAY, weekStart: WEEK });
-}
-
-test('quick add completo: area, dia, hora y duracion', function () {
-  var r = q('Cena con Ayleen #pareja vie 20:30 2h');
-  assert.strictEqual(r.title, 'Cena con Ayleen');
-  assert.strictEqual(r.areaId, 'pareja');
-  assert.strictEqual(r.date, '2026-07-31');
-  assert.strictEqual(r.time, '20:30');
-  assert.strictEqual(r.minutes, 120);
-  assert.strictEqual(r.repeat, false);
-});
-
-test('quick add sin nada extra usa hoy y una hora por defecto', function () {
-  var r = q('Ordenar el escritorio');
-  assert.strictEqual(r.title, 'Ordenar el escritorio');
-  assert.strictEqual(r.date, TODAY);
-  assert.strictEqual(r.time, null);
-  assert.strictEqual(r.minutes, 60);
-  assert.strictEqual(r.areaId, AREAS[0].id);
-});
-
-test('quick add: hoy / manana / pasado', function () {
-  assert.strictEqual(q('Algo manana').date, '2026-07-30');
-  assert.strictEqual(q('Algo mañana').date, '2026-07-30');
-  assert.strictEqual(q('Algo pasado').date, '2026-07-31');
-  assert.strictEqual(q('Algo hoy').date, TODAY);
-});
-
-test('quick add: fecha dd/mm', function () {
-  var r = q('Llamar a mama 25/08 #familia');
-  assert.strictEqual(r.date, '2026-08-25');
-  assert.strictEqual(r.areaId, 'familia');
-  assert.strictEqual(r.title, 'Llamar a mama');
-});
-
-test('quick add: duracion separada y en minutos', function () {
-  assert.strictEqual(q('Almuerzo 1.5 h').minutes, 90);
-  assert.strictEqual(q('Almuerzo 1,5h').minutes, 90);
-  assert.strictEqual(q('Trote 45min').minutes, 45);
-  assert.strictEqual(q('Trote 45 minutos').minutes, 45);
-});
-
-test('quick add: la hora necesita dos puntos, Nh es duracion', function () {
-  var r = q('Reunion 9:00 2h');
-  assert.strictEqual(r.time, '09:00');
-  assert.strictEqual(r.minutes, 120);
-  assert.strictEqual(r.title, 'Reunion');
-});
-
-test('quick add: "cada martes" crea rutina en el dia correcto', function () {
-  var r = q('Gimnasio #personal cada martes 45min');
-  assert.strictEqual(r.repeat, true);
-  assert.strictEqual(r.weekday, 1);
-  assert.strictEqual(r.date, '2026-07-28');
-  assert.strictEqual(r.title, 'Gimnasio');
-  assert.strictEqual(r.minutes, 45);
-});
-
-test('quick add: "todos los domingos" tambien repite', function () {
-  var r = q('Almuerzo familiar #familia todos los domingos 13:00');
-  assert.strictEqual(r.repeat, true);
-  assert.strictEqual(r.weekday, 6);
-  assert.strictEqual(r.date, '2026-08-02');
-  assert.strictEqual(r.time, '13:00');
-});
-
-test('quick add: "cada semana" repite el dia indicado', function () {
-  var r = q('Informe vie cada semana');
-  assert.strictEqual(r.repeat, true);
-  assert.strictEqual(r.weekday, 4);
-  assert.strictEqual(r.title, 'Informe');
-});
-
-test('quick add: texto vacio no inventa titulo', function () {
-  assert.strictEqual(q('   ').title, '');
-});
-
-test('quick add: no se come palabras del titulo que no son tokens', function () {
-  var r = q('Marcar el informe #profesional');
-  assert.strictEqual(r.title, 'Marcar el informe');
-  assert.strictEqual(r.date, TODAY);
 });
 
 // -------------------------------------------------------------- resumen
