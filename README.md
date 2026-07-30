@@ -7,7 +7,7 @@ y cuanto hecho en cada una.
 
 Funciona en dos modos:
 
-- **Nube** (el configurado hoy): entras con tu correo y contrasena y la agenda
+- **Nube** (el configurado hoy): entras con tu usuario y contrasena y la agenda
   es la misma en el computador y en el celular.
 - **Local**: si dejas `js/config.js` con los campos vacios, todo se guarda solo
   en ese navegador y no necesita internet.
@@ -22,15 +22,37 @@ con tu cuenta:
    `semana_state` y sus politicas; es idempotente, se puede volver a ejecutar.
    Convive con las tablas de logros-tracker sin tocarlas (todo lleva prefijo
    `semana_`).
-2. En **Authentication > Sign In / Providers > Email**, decide si dejas
-   encendido "Confirm email". Si lo dejas encendido, al crear la cuenta tendras
-   que abrir el correo de confirmacion antes de poder entrar.
-3. Abre la app, escribe tu correo y una contrasena y aprieta **Crear cuenta**.
-   Esa cuenta es tuya; la app no guarda la contrasena en ninguna parte.
-4. En el celular, abre la misma direccion y entra con el mismo correo.
+2. En **Authentication > Sign In / Providers > Email**, **apaga "Confirm
+   email"**. Esto es obligatorio: las cuentas son por usuario, no por correo,
+   asi que el mensaje de confirmacion no llegaria a ninguna parte y la cuenta
+   quedaria bloqueada para siempre.
+3. Abre la app, escribe un usuario (por ejemplo `mateo`) y una contrasena y
+   aprieta **Crear cuenta**. La app no guarda la contrasena en ninguna parte.
+4. En el celular, abre la misma direccion y entra con el mismo usuario.
 
 Si abres la app antes del paso 1, te va a decir "Falta crear la tabla: ejecuta
-supabase/schema.sql en el SQL Editor de Supabase".
+supabase/schema.sql en el SQL Editor de Supabase". Si te saltas el paso 2, al
+crear la cuenta te avisa que falta apagar "Confirm email".
+
+### Cuentas por usuario, sin correo
+
+Supabase Auth siempre pide un email, asi que cada usuario se traduce a uno
+sintetico e inmutable: `mateo` -> `mateo@almendrito.github.io`
+(`AUTH_EMAIL_DOMAIN` en `js/storage.js`).
+
+- Se eligio un dominio `*.github.io` porque GoTrue valida que el dominio
+  resuelva por DNS y rechaza los inventados tipo `@mi-semana.local`. Ese
+  dominio resuelve, no recibe correo (no tiene MX) y nadie mas lo puede
+  registrar, asi que no hay forma de secuestrar la cuenta pidiendo "recuperar
+  contrasena".
+- **No cambiar el dominio**: dejaria fuera a todas las cuentas ya creadas (hay
+  una prueba que falla si alguien lo mueve sin querer).
+- El usuario no distingue mayusculas ni acentos (`Máteo` y `mateo` son el
+  mismo) y admite letras, numeros, punto, guion y guion bajo, entre 3 y 32
+  caracteres.
+- **No hay recuperacion de contrasena**: no hay correo donde mandarla. Si se te
+  olvida, se cambia desde Supabase en Authentication > Users > el usuario >
+  Reset password.
 
 ## Como se usa
 
@@ -108,7 +130,7 @@ tests/logic.test.js  pruebas de logic.js y storage.js
 manifest.json, sw.js, icon.svg   para instalarla como app
 ```
 
-Pruebas (50, incluidas las de sincronizacion con un Supabase falso):
+Pruebas (57, incluidas las de sincronizacion y login con un Supabase falso):
 
 ```bash
 node tests/logic.test.js
@@ -134,6 +156,8 @@ node tests/logic.test.js
 - Ningun control de formulario puede llamarse `id`, `action`, `method`,
   `elements` ni `submit`: el named getter del DOM sombrea esas propiedades del
   `<form>` (por eso el campo oculto se llama `actId`).
+- `AUTH_EMAIL_DOMAIN` es intocable: cambiarlo deja fuera a todas las cuentas.
+  Y el proyecto de Supabase tiene que quedarse con "Confirm email" apagado.
 - El service worker es **network-first**: al publicar cambios llegan al tiro y
   el cache queda solo para uso sin conexion. Al cambiar archivos del shell hay
   que subir el numero de `CACHE`.

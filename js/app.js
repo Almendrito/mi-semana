@@ -271,7 +271,7 @@
 
   function renderFooter() {
     var cuenta = mode === 'nube' && session
-      ? '<span>Sincronizado como ' + esc(session.user.email) + '</span>' +
+      ? '<span>Sincronizado como ' + esc(Store.emailToUser(session.user.email)) + '</span>' +
         '<button class="btn small" data-act="sync">Actualizar</button>' +
         '<button class="btn small" data-act="signout">Cerrar sesion</button>'
       : '<span>Los datos se guardan solo en este navegador.</span>';
@@ -375,10 +375,11 @@
     root.innerHTML = '' +
       '<div class="auth">' +
         '<h1>Mi Semana</h1>' +
-        '<p class="sub">Entra con tu correo para ver la misma agenda en el computador y en el celular.</p>' +
+        '<p class="sub">Entra con tu usuario para ver la misma agenda en el computador y en el celular.</p>' +
         '<form id="auth-form" autocomplete="on">' +
-          '<div class="field"><label for="a-email">Correo</label>' +
-            '<input type="email" id="a-email" name="email" required autocomplete="username"></div>' +
+          '<div class="field"><label for="a-user">Usuario</label>' +
+            '<input type="text" id="a-user" name="user" required autocomplete="username" ' +
+              'autocapitalize="none" spellcheck="false" placeholder="mateo"></div>' +
           '<div class="field"><label for="a-pass">Contrasena</label>' +
             '<input type="password" id="a-pass" name="password" required minlength="6" autocomplete="current-password"></div>' +
           (authMsg ? '<p class="authmsg">' + esc(authMsg) + '</p>' : '') +
@@ -388,19 +389,20 @@
             '<button type="submit" class="btn primary">Entrar</button>' +
           '</div>' +
         '</form>' +
-        '<p class="hint">La contrasena la maneja Supabase; esta pagina no la guarda ni la envia a ningun otro lado.</p>' +
+        '<p class="hint">Sin correo: el usuario es solo tuyo y la contrasena la maneja Supabase. ' +
+          'Anotala en alguna parte, porque no hay como recuperarla desde aqui.</p>' +
       '</div>';
-    var f = root.querySelector('#a-email');
+    var f = root.querySelector('#a-user');
     if (f) f.focus();
   }
 
   function credentials() {
     var f = document.getElementById('auth-form');
     if (!f) return null;
-    var email = f.elements.email.value.trim();
+    var user = f.elements.user.value.trim();
     var password = f.elements.password.value;
-    if (!email || !password) { authMsg = 'Falta el correo o la contrasena.'; renderAuth(); return null; }
-    return { email: email, password: password };
+    if (!user || !password) { authMsg = 'Falta el usuario o la contrasena.'; renderAuth(); return null; }
+    return { user: user, password: password };
   }
 
   // ---------------------------------------------------------------- render
@@ -642,7 +644,7 @@
       if (!c) return;
       authMsg = 'Entrando...';
       renderAuth();
-      store.signIn(c.email, c.password).then(function () {
+      store.signIn(c.user, c.password).then(function () {
         authMsg = '';
       }).catch(function (err) {
         authMsg = errText(err);
@@ -751,13 +753,8 @@
       if (!c) return;
       authMsg = 'Creando cuenta...';
       renderAuth();
-      store.signUp(c.email, c.password).then(function (r) {
-        if (r.needsConfirm) {
-          authMsg = 'Cuenta creada. Revisa tu correo para confirmarla y despues entra aqui.';
-          renderAuth();
-        } else {
-          authMsg = '';
-        }
+      store.signUp(c.user, c.password).then(function () {
+        authMsg = '';
       }).catch(function (err) {
         authMsg = errText(err);
         renderAuth();

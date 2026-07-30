@@ -586,9 +586,102 @@ testAsync('lastKnownState devuelve la copia local de lo ultimo visto', function 
 
 test('authMessage traduce los errores tipicos', function () {
   assert.ok(/incorrect/i.test(S.authMessage({ message: 'Invalid login credentials' })));
-  assert.ok(/ya tiene cuenta/i.test(S.authMessage({ message: 'User already registered' })));
+  assert.ok(/ya existe/i.test(S.authMessage({ message: 'User already registered' })));
   assert.ok(/6 caracteres/.test(S.authMessage({ message: 'Password should be at least 6 characters' })));
   assert.ok(/Sin conexion/.test(S.authMessage({ message: 'Failed to fetch' })));
+  assert.ok(/Confirm email/.test(S.authMessage({ message: 'Email not confirmed' })));
+});
+
+// ------------------------------------------------------ usuarios sin correo
+
+test('userToEmail arma el correo sintetico y es estable', function () {
+  assert.strictEqual(S.userToEmail('mateo'), 'mateo@' + S.AUTH_EMAIL_DOMAIN);
+  assert.strictEqual(S.userToEmail('  Mateo  '), 'mateo@' + S.AUTH_EMAIL_DOMAIN);
+  assert.strictEqual(S.userToEmail('MATEO'), S.userToEmail('mateo'));
+  assert.strictEqual(S.userToEmail('Mateo Ayanez'), 'mateoayanez@' + S.AUTH_EMAIL_DOMAIN);
+  assert.strictEqual(S.userToEmail('mateo.a_1-x'), 'mateo.a_1-x@' + S.AUTH_EMAIL_DOMAIN);
+});
+
+test('userToEmail ignora acentos para que el usuario sea el mismo siempre', function () {
+  assert.strictEqual(S.userToEmail('Mateo'), S.userToEmail('Máteo'));
+});
+
+test('userToEmail rechaza usuarios que no sirven', function () {
+  assert.strictEqual(S.userToEmail('ab'), null);          // muy corto
+  assert.strictEqual(S.userToEmail(''), null);
+  assert.strictEqual(S.userToEmail('   '), null);
+  assert.strictEqual(S.userToEmail('@@@'), null);         // no queda nada usable
+  assert.strictEqual(S.userToEmail('.mateo'), null);      // no puede partir con punto
+  assert.strictEqual(S.userToEmail('m'.repeat(33)), null); // muy largo
+  assert.strictEqual(S.userToEmail('m'.repeat(32)), 'm'.repeat(32) + '@' + S.AUTH_EMAIL_DOMAIN);
+});
+
+test('emailToUser recupera el usuario para mostrarlo', function () {
+  assert.strictEqual(S.emailToUser('mateo@' + S.AUTH_EMAIL_DOMAIN), 'mateo');
+  assert.strictEqual(S.emailToUser(''), '');
+});
+
+test('el dominio sintetico no se cambia a la ligera', function () {
+  // Cambiarlo deja fuera a todas las cuentas ya creadas: si esta prueba falla,
+  // es porque alguien lo movio sin querer.
+  assert.strictEqual(S.AUTH_EMAIL_DOMAIN, 'almendrito.github.io');
+});
+
+testAsync('signIn y signUp traducen el usuario a su correo sintetico', function () {
+  var visto = {};
+  var st = S.makeSupabaseStore(
+    { SUPABASE_URL: 'http://x', SUPABASE_ANON_KEY: 'k' },
+    { createClient: function () {
+      return {
+        from: function () { return {}; },
+        auth: {
+          getSession: function () { return Promise.resolve({ data: { session: null } }); },
+          onAuthStateChange: function () { return { data: { subscription: { unsubscribe: function () {} } } }; },
+          signInWithPassword: function (c) {
+            visto.signIn = c.email;
+            return Promise.resolve({ data: { session: SESION }, error: null });
+          },
+          signUp: function (c) {
+            visto.signUp = c.email;
+            return Promise.resolve({ data: { session: SESION }, error: null });
+          }
+        }
+      };
+    } },
+    memStorage()
+  );
+  return st.signIn('Mateo', 'clave123')
+    .then(function () { return st.signUp('mateo', 'clave123'); })
+    .then(function () {
+      assert.strictEqual(visto.signIn, 'mateo@' + S.AUTH_EMAIL_DOMAIN);
+      assert.strictEqual(visto.signUp, 'mateo@' + S.AUTH_EMAIL_DOMAIN);
+      // usuario invalido ni siquiera llega a la red
+      return st.signIn('ab', 'clave123').then(
+        function () { throw new Error('deberia haber fallado'); },
+        function (err) { assert.ok(/entre 3 y 32/.test(err.message), err.message); }
+      );
+    });
+});
+
+testAsync('si el proyecto exige confirmar el correo, signUp lo dice claro', function () {
+  var st = S.makeSupabaseStore(
+    { SUPABASE_URL: 'http://x', SUPABASE_ANON_KEY: 'k' },
+    { createClient: function () {
+      return {
+        from: function () { return {}; },
+        auth: {
+          getSession: function () { return Promise.resolve({ data: { session: null } }); },
+          onAuthStateChange: function () { return { data: { subscription: { unsubscribe: function () {} } } }; },
+          signUp: function () { return Promise.resolve({ data: { session: null, user: {} }, error: null }); }
+        }
+      };
+    } },
+    memStorage()
+  );
+  return st.signUp('mateo', 'clave123').then(
+    function () { throw new Error('deberia haber fallado'); },
+    function (err) { assert.ok(/Confirm email/.test(err.message), err.message); }
+  );
 });
 
 test('dbMessage explica el error mas probable: falta correr el schema', function () {

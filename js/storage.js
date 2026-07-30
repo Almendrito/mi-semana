@@ -179,15 +179,49 @@
     });
   }
 
+  /*
+   * Cuentas por USUARIO, no por correo. Supabase Auth exige un email, asi que
+   * cada usuario se traduce a uno sintetico e inmutable
+   * `<usuario>@almendrito.github.io`.
+   *
+   * Por que ese dominio y no algo tipo @mi-semana.local: GoTrue valida que el
+   * dominio resuelva por DNS y rechaza los inventados. *.github.io resuelve
+   * siempre, no recibe correo (no tiene MX) y nadie mas lo puede registrar, asi
+   * que no hay forma de secuestrar la cuenta por "recuperar contrasena".
+   *
+   * NO CAMBIAR el dominio: romperia todos los logins ya creados.
+   */
+  var AUTH_EMAIL_DOMAIN = 'almendrito.github.io';
+
+  function normalizeUser(name) {
+    return Logic.norm(name).replace(/[^a-z0-9._-]+/g, '');
+  }
+
+  /** Devuelve el email sintetico, o null si el usuario no sirve. */
+  function userToEmail(name) {
+    var u = normalizeUser(name);
+    if (!/^[a-z0-9][a-z0-9._-]{2,31}$/.test(u)) return null;
+    return u + '@' + AUTH_EMAIL_DOMAIN;
+  }
+
+  function emailToUser(email) {
+    return String(email || '').split('@')[0];
+  }
+
+  var USUARIO_INVALIDO = 'El usuario necesita entre 3 y 32 caracteres: letras, numeros, punto, guion o guion bajo, sin espacios.';
+  var FALTA_AUTOCONFIRM = 'Hay que apagar "Confirm email" en Supabase (Authentication > Sign In / Providers > Email). ' +
+    'Con usuarios en vez de correos no hay donde llegue el mensaje de confirmacion.';
+
   /** Traduce los errores de Supabase Auth a algo legible. */
   function authMessage(err) {
     var m = String((err && (err.message || err.error_description)) || err || '');
-    if (/Invalid login credentials/i.test(m)) return 'Correo o contrasena incorrectos.';
-    if (/Email not confirmed/i.test(m)) return 'Falta confirmar el correo: revisa tu bandeja de entrada.';
-    if (/User already registered|already been registered/i.test(m)) return 'Ese correo ya tiene cuenta: entra en vez de crearla.';
+    if (/Invalid login credentials/i.test(m)) return 'Usuario o contrasena incorrectos.';
+    if (/Email not confirmed/i.test(m)) return FALTA_AUTOCONFIRM;
+    if (/User already registered|already been registered/i.test(m)) return 'Ese usuario ya existe: entra en vez de crearlo.';
     if (/Password should be at least/i.test(m)) return 'La contrasena necesita al menos 6 caracteres.';
-    if (/valid email/i.test(m)) return 'Ese correo no parece valido.';
+    if (/valid email|Email address .* invalid/i.test(m)) return USUARIO_INVALIDO;
     if (/rate limit|too many/i.test(m)) return 'Demasiados intentos seguidos: espera un momento.';
+    if (/Signups not allowed/i.test(m)) return 'El proyecto tiene desactivado crear cuentas nuevas.';
     if (/Failed to fetch|NetworkError|network/i.test(m)) return 'Sin conexion con la base.';
     return m || 'Error desconocido.';
   }
@@ -307,19 +341,25 @@
           if (sub && sub.data && sub.data.subscription) sub.data.subscription.unsubscribe();
         };
       },
-      signIn: function (email, password) {
+      signIn: function (usuario, password) {
+        var email = userToEmail(usuario);
+        if (!email) return Promise.reject(new Error(USUARIO_INVALIDO));
         return client.auth.signInWithPassword({ email: email, password: password })
           .then(function (r) {
             if (r.error) throw new Error(authMessage(r.error));
             return r.data.session;
           });
       },
-      signUp: function (email, password) {
+      signUp: function (usuario, password) {
+        var email = userToEmail(usuario);
+        if (!email) return Promise.reject(new Error(USUARIO_INVALIDO));
         return client.auth.signUp({ email: email, password: password })
           .then(function (r) {
             if (r.error) throw new Error(authMessage(r.error));
-            // sin sesion = el proyecto exige confirmar el correo
-            return { needsConfirm: !r.data.session, session: r.data.session };
+            // Sin sesion = el proyecto todavia exige confirmar el correo, y con
+            // usuarios sinteticos ese correo no llega a ninguna parte.
+            if (!r.data.session) throw new Error(FALTA_AUTOCONFIRM);
+            return { session: r.data.session };
           });
       },
       signOut: function () {
@@ -382,6 +422,10 @@
     uuidv4: uuidv4,
     authMessage: authMessage,
     dbMessage: dbMessage,
+    AUTH_EMAIL_DOMAIN: AUTH_EMAIL_DOMAIN,
+    normalizeUser: normalizeUser,
+    userToEmail: userToEmail,
+    emailToUser: emailToUser,
     makeLocalStore: makeLocalStore,
     makeSupabaseStore: makeSupabaseStore,
     exportText: exportText,
