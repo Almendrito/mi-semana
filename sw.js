@@ -4,7 +4,7 @@
  * llegan al tiro, sin quedarse pegado en una version vieja) y se guarda copia;
  * si no hay red, se responde desde el cache.
  */
-var CACHE = 'mi-semana-v3';
+var CACHE = 'mi-semana-v4';
 var SHELL = [
   './',
   './index.html',
@@ -35,8 +35,15 @@ self.addEventListener('fetch', function (ev) {
   if (ev.request.method !== 'GET') return;
   if (new URL(ev.request.url).origin !== self.location.origin) return;
 
+  // cache:'no-store' o el fetch se responde con el cache HTTP del navegador
+  // (GitHub Pages manda max-age=600) y "network-first" no traeria nada nuevo.
+  // Un Request en modo navigate no se puede reconstruir: se rehace por URL.
+  var fresco = ev.request.mode === 'navigate'
+    ? new Request(ev.request.url, { cache: 'no-store', credentials: 'same-origin' })
+    : new Request(ev.request, { cache: 'no-store' });
+
   ev.respondWith(
-    fetch(ev.request).then(function (res) {
+    fetch(fresco).then(function (res) {
       if (res.ok) {
         var copy = res.clone();
         caches.open(CACHE).then(function (c) { c.put(ev.request, copy); });
