@@ -1,0 +1,19 @@
+{
+  "name": "Mi Semana",
+  "short_name": "Mi Semana",
+  "description": "Registro semanal de actividades para equilibrar trabajo, pareja y familia.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f1218",
+  "theme_color": "#12151c",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
